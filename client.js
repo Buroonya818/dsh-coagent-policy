@@ -12,7 +12,8 @@ window.__ModuleLoader__.load({
       zh: {
         nav: 'Co-agent 模型', title: 'Co-agent 模型白名单',
         intro: '在新会话选择「Co-agent 白名单」预设后，任何主模型只能把任务交给这里勾选的子模型。主模型不变，也不会自动启动所有勾选项。',
-        migrate: '下方预填了旧版 Astra / Sol 名单。勾选「为所有主模型启用共用名单」并保存后才会切换。只改常用模型，不会迁移或放宽旧名单。',
+        migrate: '下方已预填旧版 Astra / Sol 名单，可以直接编辑。旧名单继续生效，直到你勾选「为所有主模型启用共用名单」并保存。只保存常用模型不会切换名单。',
+        confirmMigration: '名单有未保存的更改。要使其生效，请勾选上方「为所有主模型启用共用名单」。',
         enableShared: '为所有主模型启用共用名单', enabled: '共用名单已启用',
         load: '正在读取设置…', refresh: '刷新模型目录', refreshing: '正在加载模型…', search: '搜索模型或提供方',
         allowed: '允许的子代理模型', count: '已选', selectHelp: '勾选一项即固定该模型；勾选多项时，主代理可以从中选择。',
@@ -21,7 +22,8 @@ window.__ModuleLoader__.load({
         save: '保存更改', discard: '放弃更改', saving: '正在保存…', saved: '已保存。设置适用于下一次委派。',
         failed: '未能保存，草稿仍保留。', conflict: '设置已在别处更新。请放弃草稿后重新编辑。', readonly: '此窗口不能编辑设置。',
         invalid: '请至少勾选一个子代理模型。', invalidEffort: '请修改或移除当前不支持的推理档位。',
-        partial: '有提供方暂时无法加载；已保存的模型不会被清除。', unavailable: '暂时无法读取模型目录。可刷新重试。', none: '没有匹配的模型。',
+        partial: '部分提供方暂时无法加载；请刷新重试。已保存的模型不会被清除。', unavailable: '未能读取模型目录，名单没有改动。请点击「刷新模型目录」重试。',
+        none: '没有匹配的模型。', emptyCatalog: '当前没有可用模型。请在「设置 → 模型」检查提供方，再刷新目录。', savedUnchecked: '已保留，等待目录确认',
         speed: 'Codex 速度 · 全局', speedHint: '当前 DSH 无法为单个子代理设置速度。这里只调整 Codex 订阅的全局速度，会影响此 App 中所有支持的 Codex 会话（含主代理）；不会随名单保存。Fast 和 Ultrafast 可能增加用量。',
         codeSpeed: '支持的速度', standard: '标准', fast: 'Fast', ultrafast: 'Ultrafast', applySpeed: '应用全局速度', speedSaved: '已应用全局速度。', speedFailed: '未能应用全局速度，请刷新重试。',
         speedUnavailable: '速度由提供方管理。没有可在本页单独设置的子代理速度。',
@@ -29,7 +31,8 @@ window.__ModuleLoader__.load({
       en: {
         nav: 'Co-agent models', title: 'Co-agent model allowlist',
         intro: 'In a new session using the Co-agent 白名单 preset, any lead model can delegate only to the checked co-agent models. The lead stays unchanged; checking several does not start them all.',
-        migrate: 'The old Astra/Sol lists are suggested below. Check “Enable a shared list for all lead models” and save to switch. Editing favorites alone never migrates or widens the old lists.',
+        migrate: 'The old Astra/Sol lists are prefilled below and can be edited now. They remain active until you check “Enable a shared list for all lead models” and save. Saving only favorites never switches the list.',
+        confirmMigration: 'The allowlist has unsaved changes. To apply them, check “Enable a shared list for all lead models” above.',
         enableShared: 'Enable a shared list for all lead models', enabled: 'Shared list is active',
         load: 'Reading settings…', refresh: 'Refresh model catalog', refreshing: 'Loading models…', search: 'Search models or providers',
         allowed: 'Allowed co-agent models', count: 'Selected:', selectHelp: 'Check one to pin that model, or several to let the lead choose among them.',
@@ -38,7 +41,8 @@ window.__ModuleLoader__.load({
         save: 'Save changes', discard: 'Discard changes', saving: 'Saving…', saved: 'Saved. Changes apply to the next delegation.',
         failed: 'Could not save. Your draft is retained.', conflict: 'Settings changed elsewhere. Discard this draft and edit again.', readonly: 'This window cannot edit settings.',
         invalid: 'Select at least one co-agent model.', invalidEffort: 'Change or remove the unsupported reasoning effort.',
-        partial: 'Some providers could not be loaded. Saved models are retained.', unavailable: 'The model catalog could not be read. Refresh to try again.', none: 'No matching models.',
+        partial: 'Some providers could not be loaded. Refresh to retry. Saved models are retained.', unavailable: 'The model catalog could not be read. Your list is unchanged. Click “Refresh model catalog” to retry.',
+        none: 'No matching models.', emptyCatalog: 'No models are currently available. Check providers in Settings → Models, then refresh.', savedUnchecked: 'Retained; awaiting catalog confirmation',
         speed: 'Codex speed · global', speedHint: 'This DSH version cannot set speed per co-agent. This setting changes Codex subscription speed for all supported Codex sessions in this app, including leads. It is not saved with the allowlist. Fast and Ultrafast may use more quota.',
         codeSpeed: 'Supported speeds', standard: 'Standard', fast: 'Fast', ultrafast: 'Ultrafast', applySpeed: 'Apply global speed', speedSaved: 'Global speed applied.', speedFailed: 'The global speed could not be applied. Refresh and try again.',
         speedUnavailable: 'Speed is managed by the provider. There is no per-co-agent speed control here.',
@@ -113,6 +117,8 @@ window.__ModuleLoader__.load({
     function makeCard(ctx) {
       const form = ctx.configForms.get(ENTRY);
       const codexForm = ctx.configForms.get('codex-subscription');
+      const session = ctx.remote.session;
+      const rpc = ctx.connection.rpc;
       return function CoagentPolicyCard({ t }) {
         const snapshot = useForm(form);
         const [draft, setDraft] = React.useState(null);
@@ -127,13 +133,13 @@ window.__ModuleLoader__.load({
           setCatalog(old => ({ ...old, status: 'loading' }));
           async function load() {
             let rows, partial;
-            try { ({ rows, partial } = decodeCatalog(await ctx.remote.session.modelCatalog())); }
+            try { ({ rows, partial } = decodeCatalog(await session.modelCatalog())); }
             catch { if (!signal.aborted) setCatalog(old => ({ ...old, status: 'error', speed: null })); return; }
             if (signal.aborted) return;
             setCatalog({ rows, partial, status: 'ready', speed: null });
             if (!rows.some(model => model.provider === CODEX)) return;
             try {
-              const response = await ctx.get('connection')?.rpc.call('/api', 'codex-subscription/preferences/status', {}, signal);
+              const response = await rpc.call('/api', 'codex-subscription/preferences/status', {}, signal);
               if (!signal.aborted && response?.ok && Array.isArray(response.value?.fastModels) && Array.isArray(response.value?.ultrafastModels)) {
                 const ids = new Set(rows.filter(model => model.provider === CODEX).map(model => model.model));
                 const supported = field => new Set(response.value[field].filter(id => ids.has(id)));
@@ -161,15 +167,19 @@ window.__ModuleLoader__.load({
         const matches = model => `${model.provider} ${model.providerName ?? ''} ${model.model} ${model.title ?? ''}`.toLowerCase().includes(query);
         const listed = catalog.rows.filter(matches).sort((a, b) => Number(favorites.has(key(b))) - Number(favorites.has(key(a)))
           || a.providerName.localeCompare(b.providerName) || a.title.localeCompare(b.title) || key(a).localeCompare(key(b)));
-        const saveRules = state.activate && (legacy || JSON.stringify(state.rules) !== JSON.stringify(base.rules));
+        const catalogReady = catalog.status === 'ready';
+        const rulesEdited = JSON.stringify(state.rules) !== JSON.stringify(base.rules);
+        const needsOptIn = legacy && rulesEdited && !state.activate;
+        const saveRules = state.activate && (legacy || rulesEdited);
         const saveFavorites = JSON.stringify(state.favorites) !== JSON.stringify(base.favorites);
         const invalid = saveRules && !state.rules.length;
         const invalidEffort = saveRules && state.rules.some(rule => {
           const model = models.get(key(rule));
           return rule.reasoningEffort && model && !model.efforts.some(effort => effort.id === rule.reasoningEffort);
         });
+        const canSave = catalogReady && !disabled && dirty && !needsOptIn && (saveRules || saveFavorites) && !invalid && !invalidEffort;
         const save = async () => {
-          if (disabled || !dirty || (!saveRules && !saveFavorites) || invalid || invalidEffort) return;
+          if (!canSave) return;
           const ops = [];
           if (saveRules) ops.push({ op: 'set', path: ['rules'], value: state.rules });
           if (saveFavorites) ops.push({ op: 'set', path: ['favorites'], value: state.favorites });
@@ -182,8 +192,8 @@ window.__ModuleLoader__.load({
         const label = model => h('span', null, model.title ?? model.model,
           h('small', { style: { ...muted, display: 'block' } }, `${model.provider}${model.title && model.title !== model.model ? ' / ' + model.model : ''}`));
         const offline = (entries, update) => entries.filter(model => !models.has(key(model))).map(model => h('div', { key: key(model), style: controls },
-          h('span', { style: muted }, `${model.provider}/${model.model}${model.reasoningEffort ? ' · ' + model.reasoningEffort : ''} — ${t('savedOffline')}`),
-          button({ onClick: () => update(omit(entries, model)) }, t('remove'))));
+          h('span', { style: muted }, `${model.provider}/${model.model}${model.reasoningEffort ? ' · ' + model.reasoningEffort : ''} — ${t(catalogReady && !catalog.partial ? 'savedOffline' : 'savedUnchecked')}`),
+          catalogReady ? button({ onClick: () => update(omit(entries, model)) }, t('remove')) : null));
         const renderModel = model => {
           const k = key(model);
           const rule = selected.get(k);
@@ -203,7 +213,8 @@ window.__ModuleLoader__.load({
               ...model.efforts.map(effort => h('option', { key: effort.id, value: effort.id, title: effort.description }, effort.name ?? effort.id)))) : null,
             speeds.length > 1 ? h('p', { style: muted }, `${t('codeSpeed')}: ${speeds.map(t).join(' / ')}`) : null);
         };
-        const msg = saving ? 'saving' : conflict ? 'conflict' : !writable ? 'readonly' : invalid ? 'invalid' : invalidEffort ? 'invalidEffort' : status;
+        const msg = saving ? 'saving' : conflict ? 'conflict' : !writable ? 'readonly' : needsOptIn ? 'confirmMigration' : invalid ? 'invalid' : invalidEffort ? 'invalidEffort' : status;
+        const emptyMessage = catalogReady && !listed.length ? t(query ? 'none' : 'emptyCatalog') : null;
         return h('section', { style: stack },
           h('h3', { style: heading }, t('title')), h('p', { style: muted }, t('intro')),
           legacy ? h('div', { style: stack }, h('p', { style: muted }, t('migrate')),
@@ -211,21 +222,21 @@ window.__ModuleLoader__.load({
           h('div', { style: controls }, h('input', { type: 'search', 'aria-label': t('search'), placeholder: t('search'), style: control, value: search, onChange: event => setSearch(event.currentTarget.value) }),
             button({ disabled: catalog.status === 'loading', onClick: refresh }, t(catalog.status === 'loading' ? 'refreshing' : 'refresh'))),
           catalog.status === 'error' || catalog.partial ? h('p', { style: warn, role: 'status' }, t(catalog.status === 'error' ? 'unavailable' : 'partial')) : null,
-          h('fieldset', { style: field, disabled: disabled || !state.activate }, h('legend', { style: legend }, `${t('allowed')} · ${t('count')} ${state.rules.length}`),
-            h('p', { style: muted }, t('selectHelp')), ...(listed.length ? listed.map(renderModel) : [h('p', { key: 'no-model', style: muted }, t(catalog.status === 'loading' ? 'refreshing' : 'none'))]),
+          h('fieldset', { style: field, disabled: disabled || !catalogReady }, h('legend', { style: legend }, `${t('allowed')} · ${t('count')} ${state.rules.length}`),
+            h('p', { style: muted }, t('selectHelp')), ...listed.map(renderModel), emptyMessage ? h('p', { style: muted }, emptyMessage) : null,
             ...offline(state.rules, rules => change({ rules }))),
-          h('fieldset', { style: field, disabled }, h('legend', { style: legend }, t('favorites')), h('p', { style: muted }, t('favoriteHint')),
+          h('fieldset', { style: field, disabled: disabled || !catalogReady }, h('legend', { style: legend }, t('favorites')), h('p', { style: muted }, t('favoriteHint')),
             ...listed.map(model => h(React.Fragment, { key: key(model) }, checkbox({ checked: favorites.has(key(model)), onChange: event => {
               change({ favorites: event.currentTarget.checked ? [...state.favorites, route(model)] : omit(state.favorites, model) });
             } }, label(model)))), ...offline(state.favorites, items => change({ favorites: items }))),
-          h('div', { style: controls }, button({ disabled: disabled || !dirty || (!saveRules && !saveFavorites) || invalid || invalidEffort, onClick: () => { void save(); } }, t('save')),
+          h('div', { style: controls }, button({ disabled: !canSave, onClick: () => { void save(); } }, t('save')),
             draft ? button({ disabled: saving, onClick: () => { setDraft(null); setStatus(null); } }, t('discard')) : null),
-          h('p', { role: 'status', style: ['failed', 'conflict', 'invalid', 'invalidEffort'].includes(msg) ? warn : muted }, msg ? t(msg) : ''),
+          h('p', { role: 'status', style: ['failed', 'conflict', 'confirmMigration', 'invalid', 'invalidEffort'].includes(msg) ? warn : muted }, msg ? t(msg) : ''),
           h(CodexSpeed, { t, form: codexForm, capability: catalog.speed }));
       };
     }
     return {
-      inject: ['slots', 'locale', 'configForms', 'remote.session'],
+      inject: ['slots', 'locale', 'configForms', 'remote', 'remote.session', 'connection'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, text), 'co-agent UI copy');
         const t = ctx.locale.bind(NS);

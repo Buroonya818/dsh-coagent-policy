@@ -4,6 +4,7 @@ import { createRequire, registerHooks } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 const install = process.env.DSH_INSTALL_DIR;
 assert.ok(install && process.versions.electron, 'Use the DSH Desktop Electron binary in Node mode.');
@@ -18,6 +19,7 @@ const { Config, apply: applySettings } = await import('../index.js');
 const { apply } = await import('../delegate.js');
 const { LEGACY_PROVIDER: CODEX, allowedOn, chooseChild } = await import('../policy.js');
 const { SubagentRuntime, resolveChildAgentOptions } = await import('@deepseek-ai/dsh-subagent');
+const { Context } = await import('@deepseek-ai/cordis');
 const boot = await import('@deepseek-ai/dsh-app-boot');
 hook.deregister();
 const manifest = JSON.parse(fs.readFileSync(join(bundle, 'package.json'), 'utf8'));
@@ -76,6 +78,41 @@ test('bundle admission, preset scope and distributed resources', () => {
   for (const lang of ['zh', 'en']) assert.ok(JSON.parse(fs.readFileSync(join(bundle, 'locale', `${lang}.json`), 'utf8')).meta.title);
   assert.match(fs.readFileSync(join(bundle, 'icon.svg'), 'utf8'), /^<svg .*viewBox="0 0 36 36">/u);
   for (const dest of Object.values(manifest.exports)) if (!dest.includes('*')) assert.ok(fs.existsSync(join(bundle, dest)), dest);
+});
+
+test('Desktop Client resolves the model catalog and Codex transport from sibling services', async () => {
+  // Exercise the shipped Client factory and installed Cordis, without rendering.
+  let entry;
+  runInNewContext(fs.readFileSync(join(bundle, 'client.js'), 'utf8'), {
+    window: { __ModuleLoader__: { load: module => { entry = module; } } },
+  }, { filename: 'client.js' });
+  assert.equal(entry.id, manifest.name);
+  const client = entry.factory(spec => {
+    assert.equal(spec, 'react');
+    return Object.freeze({}); // No React API is used while registering the slots.
+  });
+  const root = new Context();
+  const reads = [], slots = [];
+  const session = { modelCatalog: async () => ({ ok: true, value: { groups: [], failures: [] } }) };
+  try {
+    await root.plugin({ apply(ctx) {
+      ctx.provide('remote', { get session() { reads.push('session'); return session; } });
+      ctx.provide('remote.session', session);
+      ctx.provide('connection', { get rpc() { reads.push('rpc'); return {}; } });
+      ctx.provide('slots', {
+        inject: (_name, declare) => declare(),
+        register: ({ name }) => { slots.push(name); return () => {}; },
+      });
+      ctx.provide('locale', { register: () => () => {}, bind: () => key => key });
+      ctx.provide('configForms', { get: () => ({}), whileServed: (_entries, declare) => declare() });
+    } });
+    await root.inject(['remote.session'], ctx => {
+      assert.throws(() => ctx.remote.session, /cannot get property "remote" without inject/);
+    });
+    await root.plugin(client);
+    assert.deepEqual(reads, ['session', 'rpc']);
+    assert.deepEqual(slots, ['settings.section', 'settings.section.icon', 'plugins.bundle.config']);
+  } finally { root.fiber.dispose(); }
 });
 
 test('schema retains legacy selection and accepts route tuples and optional effort', () => {
