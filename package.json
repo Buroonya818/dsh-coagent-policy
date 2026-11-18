@@ -1,0 +1,36 @@
+{
+  "name": "@local/dsh-coagent-policy",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Desktop co-agent model allowlist with live model capabilities, per-model reasoning effort, and favorites.",
+  "repository": { "type": "git", "url": "git+https://github.com/Buroonya818/dsh-coagent-policy.git" },
+  "engines": { "dsh": "0.2.2-rc.3" },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "~3.19.0",
+    "@deepseek-ai/dsh-subagent": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./delegate": "./delegate.js",
+    "./client": "./client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": ["index.js", "delegate.js", "policy.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
+    }
+  }
+}

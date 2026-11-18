@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Co-agent model allowlist",
+    "description": "Choose co-agent models, reasoning efforts and pinned favorites from the live model catalog. Open Settings → Co-agent models, then choose the Co-agent 白名单 preset in a new session. Any lead model can use this preset. Codex speed is a separate app-wide preference, not a per-child setting."
+  }
+}
